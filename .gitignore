@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+# raw bulk downloads are cached locally, never committed
+.cache/
