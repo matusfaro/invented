@@ -1,0 +1,72 @@
+# Thin weekly ingest: fetch secrets → run the pipeline scripts (the same ones
+# you run locally) → commit /data → deploy. No logic in YAML.
+#
+# Wednesday cron (day after USPTO's Tuesday drop) at an off-peak minute —
+# GitHub cron is best-effort and drops runs at busy times — plus a Thursday
+# retry that the weeks ledger turns into a no-op when Wednesday succeeded.
+# The reveal window starts Thursday 00:00 UTC, so even the retry lands in time.
+name: weekly-ingest
+
+on:
+  schedule:
+    - cron: '23 7 * * 3' # Wed 07:23 UTC
+    - cron: '41 6 * * 4' # Thu 06:41 UTC — retry; no-op if Wednesday ran
+  workflow_dispatch:
+    inputs:
+      week:
+        description: 'Grant Tuesday (YYYY-MM-DD), empty = latest'
+        required: false
+
+permissions:
+  contents: write
+  actions: write # keepalive re-enable
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pipeline/pnpm-lock.yaml
+      - run: pnpm --dir pipeline install --frozen-lockfile
+
+      - name: Ingest weekly grants (NEW + TRENDING)
+        run: pnpm --dir pipeline run ingest ${{ inputs.week && format('-- --week {0}', inputs.week) || '' }}
+        env:
+          USPTO_API_KEY: ${{ secrets.USPTO_API_KEY }}
+
+      - name: Ingest expirations (EXPIRING)
+        run: pnpm --dir pipeline run expiring
+        env:
+          USPTO_API_KEY: ${{ secrets.USPTO_API_KEY }}
+
+      - name: Commit data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/
+          git diff --cached --quiet || git commit -m "data: weekly ingest $(date -u +%F)"
+          git push
+
+      - name: Keepalive (scheduled workflows auto-disable after 60 idle days)
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/weekly-ingest.yml/enable" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  deploy:
+    needs: ingest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml

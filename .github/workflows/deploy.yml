@@ -1,0 +1,51 @@
+# Thin deploy: build the site (data/ is copied into dist by vite config) and
+# publish via actions/deploy-pages — the path exempt from the 10-builds/hour
+# Pages limit. All logic lives in site/ scripts; this is orchestration only.
+name: deploy
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['site/**', 'shared/**', 'data/**']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # when called after the ingest job pushed data commits, build THOSE, not the triggering sha
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm --dir site install --frozen-lockfile
+      - run: pnpm --dir site run build
+        env:
+          # Project pages serve under /<repo>/. Set repo variable BASE_PATH=/
+          # after wiring a custom domain.
+          BASE_PATH: ${{ vars.BASE_PATH || format('/{0}/', github.event.repository.name) }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
