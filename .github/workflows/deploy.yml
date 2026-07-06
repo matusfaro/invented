@@ -7,7 +7,7 @@ on:
   workflow_call:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master]
     paths: ['site/**', 'shared/**', 'data/**']
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main # when called after the ingest job pushed data commits, build THOSE, not the triggering sha
+          ref: master # when called after the ingest job pushed data commits, build THOSE, not the triggering sha
       - uses: pnpm/action-setup@v4
         with:
           version: 11
