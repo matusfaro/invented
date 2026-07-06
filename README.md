@@ -25,6 +25,21 @@ Upvoting a patent requires citing it in your own patent application (USPTO fees 
 - `data/` — committed JSON feeds (the "database")
 - `.github/workflows/` — thin cron wrappers: fetch → commit → build → deploy
 
+## One-time GitHub setup
+
+1. Create the GitHub repo (public), push `master`, make it the default branch.
+2. **USPTO API key** (required for real data): create a USPTO.gov account at
+   [data.uspto.gov/myodp](https://data.uspto.gov/myodp) (needs ID.me identity
+   verification, one time), generate an API key, save it as the `USPTO_API_KEY`
+   Actions secret. Keys idle >90 days are deleted; the weekly cron keeps ours warm.
+3. **Pages**: repo Settings → Pages → Source: "GitHub Actions".
+4. **Comments**: enable Discussions on the repo, install the
+   [giscus app](https://github.com/apps/giscus), create a "Patents" discussion
+   category, then fill `site/src/config.ts` from the [giscus.app](https://giscus.app)
+   configurator.
+5. Kick the first run: Actions → weekly-ingest → Run workflow.
+6. (Later, custom domain) point DNS at Pages, set repo variable `BASE_PATH=/`.
+
 ## Local dev
 
 ```bash
