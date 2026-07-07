@@ -35,9 +35,13 @@ const APPL_TYPES: Record<string, PatentType> = {
   reissue: 'reissue',
 };
 
-/** "D0989358" → "D989358", "011234567" → "11234567" (Google Patents style) */
+/**
+ * "D0989358" → "D989358", "011234567" → "11234567" (Google Patents style).
+ * The maintenance-fee file zero-pads BEFORE the letter prefix too
+ * ("000000RE45992" → "RE45992").
+ */
 export function normalizeDocNumber(raw: string): string {
-  const m = raw.match(/^([A-Z]{0,2})0*(\d+)$/);
+  const m = raw.match(/^0*([A-Z]{0,2})0*(\d+)$/);
   return m ? `${m[1]}${m[2]}` : raw;
 }
 
@@ -117,7 +121,17 @@ export function parseGrantDoc(doc: string): ParsedGrant | null {
   const title = textOf(biblio['invention-title']).replace(/\s+/g, ' ').trim();
   if (!title) return null;
 
-  let abstract = textOf(grant['abstract']).replace(/\s+/g, ' ').trim() || undefined;
+  // Abstract straight from the raw XML: parsed-object traversal loses the
+  // interleaving of inline elements (<figref>, <b>, …) with text, scrambling
+  // sentences like "A device (1) for heating…". Tag-stripping keeps order.
+  let abstract: string | undefined;
+  const absMatch = doc.match(/<abstract[\s>][\s\S]*?<\/abstract>/);
+  if (absMatch) {
+    abstract =
+      decodeEntities(absMatch[0].replace(/<[^>]+>/g, ' '))
+        .replace(/\s+/g, ' ')
+        .trim() || undefined;
+  }
   if (abstract && abstract.length > 300) abstract = `${abstract.slice(0, 297).trimEnd()}…`;
 
   // Inventors: v4.x puts them under us-parties > inventors (or applicants doubling as inventors)

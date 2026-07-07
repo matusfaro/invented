@@ -11,23 +11,39 @@ import { useModals } from '../App';
  * showed up in NEW.
  */
 export function FeedTrending({ manifest }: { manifest: Manifest | null }) {
-  const [file, setFile] = useState<TrendingFile | null>(null);
+  const [files, setFiles] = useState<TrendingFile[] | null>(null);
   const now = useNow();
 
-  const week = manifest?.trending[manifest.trending.length - 1];
+  // Load the two newest weeks: right after a new drop lands, its citing
+  // patents haven't started revealing yet, so we fall back to the week still
+  // mid-reveal rather than showing an empty list.
+  const weeks = manifest?.trending.slice(-2).reverse() ?? [];
+  const weeksKey = weeks.join(',');
   useEffect(() => {
-    if (week) void fetchTrendingWeek(week).then(setFile);
-  }, [week]);
+    if (weeks.length)
+      void Promise.all(weeks.map(fetchTrendingWeek)).then((fs) =>
+        setFiles(fs.filter((f): f is TrendingFile => f !== null)),
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeksKey]);
 
   if (!manifest) return <div className="empty">loading…</div>;
-  if (!week || !file)
+  if (weeks.length === 0 || !files)
     return <div className="empty">No trending data yet — the weekly tally hasn't run.</div>;
 
-  const ranked = file.items
-    .map((item) => ({ item, live: item.citedBy.filter((c) => c.revealTs <= now).length }))
-    .filter((r) => r.live > 0)
-    .sort((a, b) => b.live - a.live)
-    .slice(0, 100);
+  const rankWeek = (f: TrendingFile) =>
+    f.items
+      .map((item) => ({ item, live: item.citedBy.filter((c) => c.revealTs <= now).length }))
+      .filter((r) => r.live > 0)
+      .sort((a, b) => b.live - a.live)
+      .slice(0, 100);
+
+  let file = files[0];
+  let ranked = rankWeek(file);
+  if (ranked.length === 0 && files[1]) {
+    file = files[1];
+    ranked = rankWeek(file);
+  }
 
   return (
     <main>

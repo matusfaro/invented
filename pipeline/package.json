@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "ingest": "tsx ingest-grants.ts",
-    "expiring": "tsx ingest-expirations.ts",
+    "ingest": "tsx --env-file-if-exists=.env ingest-grants.ts",
+    "expiring": "tsx --env-file-if-exists=.env ingest-expirations.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
