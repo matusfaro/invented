@@ -176,8 +176,9 @@ export function parseGrantDoc(doc: string): ParsedGrant | null {
     const d = c?.['patcit']?.['document-id'];
     if (!d || String(d['country']) !== 'US') continue;
     const docNum = String(d['doc-number'] ?? '');
-    // Applications (kind A1/A2 with 11+ digit numbers) aren't granted patents; skip them.
-    if (/^\d{11}$/.test(docNum)) continue;
+    // Applications aren't granted patents; skip them. They appear as 11-digit
+    // numbers ("20160026253") or slash-formatted publications ("2016/0026253").
+    if (/^\d{11}$/.test(docNum) || docNum.includes('/')) continue;
     const citedId = normalizeDocNumber(docNum);
     if (!citedId || seenCited.has(citedId)) continue;
     seenCited.add(citedId);
