@@ -5,10 +5,12 @@
  * https://giscus.app configurator. Empty repo = comments show a setup note.
  */
 export const GISCUS = {
-  repo: '', // e.g. 'matusfaro/invented'
-  repoId: '',
-  category: 'Patents',
-  categoryId: '',
+  repo: 'matusfaro/invented',
+  repoId: 'R_kgDOTli3EQ',
+  // "General" — category creation isn't exposed via the GitHub API; swap to a
+  // dedicated "Patents" category (created in the Discussions UI) when it exists.
+  category: 'General',
+  categoryId: 'DIC_kwDOTli3Ec4DCNAc',
 };
 
 export const SITE_NAME = 'invented.';
