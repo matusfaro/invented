@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Manifest, TrendingFile, TrendingItem } from '../../../shared/types';
-import { fetchTrendingWeek, googlePatentsUrl, patentPdfUrl } from '../api';
+import { fetchTrendingWeek, patentPdfUrl } from '../api';
 import { useNow } from '../reveal';
 import { useModals } from '../App';
 
@@ -79,7 +79,7 @@ function TrendingCard({ item, live, rank }: { item: TrendingItem; live: number; 
       </div>
       <div className="card-body">
         <h3 className="card-title">
-          <a href={googlePatentsUrl(item.id)} target="_blank" rel="noreferrer">
+          <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
             #{rank} · US{item.id}
             {item.patentee ? ` — ${item.patentee}` : ''}
           </a>
@@ -91,9 +91,6 @@ function TrendingCard({ item, live, rank }: { item: TrendingItem; live: number; 
           </span>
         </div>
         <div className="card-actions">
-          <a href={googlePatentsUrl(item.id)} target="_blank" rel="noreferrer">
-            google patents
-          </a>
           <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
             pdf
           </a>

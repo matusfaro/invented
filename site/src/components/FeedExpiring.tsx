@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ExpiringDayFile, ExpiringItem, Manifest } from '../../../shared/types';
-import { fetchExpiringDay, googlePatentsUrl, patentPdfUrl, utcDateString } from '../api';
+import { fetchExpiringDay, patentPdfUrl, utcDateString } from '../api';
 
 /**
  * EXPIRING reveals LATE, never early: the pipeline only lists a patent on a
@@ -70,7 +70,7 @@ function ExpiringCard({ item }: { item: ExpiringItem }) {
       </div>
       <div className="card-body">
         <h3 className="card-title">
-          <a href={googlePatentsUrl(item.id)} target="_blank" rel="noreferrer">
+          <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
             {item.title ?? `US ${item.id}`}
           </a>
         </h3>
@@ -84,9 +84,6 @@ function ExpiringCard({ item }: { item: ExpiringItem }) {
           </span>
         </div>
         <div className="card-actions">
-          <a href={googlePatentsUrl(item.id)} target="_blank" rel="noreferrer">
-            google patents
-          </a>
           <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
             pdf
           </a>

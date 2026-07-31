@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PatentItem } from '../../../shared/types';
-import { fetchNewDay, googlePatentsUrl, patentPdfUrl } from '../api';
+import { fetchNewDay, patentPdfUrl } from '../api';
 import { industryOf } from '../cpc';
 import { hrefFor } from '../router';
 import { useModals } from '../App';
@@ -22,8 +22,8 @@ export function PatentDetail({ date, id }: { date: string; id: string }) {
     return (
       <div className="empty">
         Can't find US{id} in the {date} drop.{' '}
-        <a href={googlePatentsUrl(id)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
-          Try Google Patents
+        <a href={patentPdfUrl(id)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
+          View the USPTO PDF
         </a>
         .
       </div>
@@ -69,9 +69,6 @@ export function PatentDetail({ date, id }: { date: string; id: string }) {
 
       <div className="detail-section card-actions">
         <button onClick={() => modals.openUpvote(item)}>⬆ upvote (from $400)</button>
-        <a href={googlePatentsUrl(item.id)} target="_blank" rel="noreferrer">
-          google patents
-        </a>
         <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
           full pdf
         </a>

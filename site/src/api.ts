@@ -27,10 +27,6 @@ export function utcDateString(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
-export function googlePatentsUrl(id: string): string {
-  return `https://patents.google.com/patent/US${id}`;
-}
-
 export function patentPdfUrl(id: string): string {
   return `https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/${id}`;
 }

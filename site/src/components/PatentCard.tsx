@@ -1,5 +1,5 @@
 import type { PatentItem } from '../../../shared/types';
-import { googlePatentsUrl, patentPdfUrl } from '../api';
+import { patentPdfUrl } from '../api';
 import { industryOf } from '../cpc';
 import { hrefFor } from '../router';
 import { useModals } from '../App';
@@ -51,9 +51,6 @@ export function PatentCard({
         {item.abstract && <p className="card-abstract">{item.abstract}</p>}
         <div className="card-actions">
           <a href={detailHref}>💬 comments</a>
-          <a href={googlePatentsUrl(item.id)} target="_blank" rel="noreferrer">
-            google patents
-          </a>
           <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
             pdf
           </a>
