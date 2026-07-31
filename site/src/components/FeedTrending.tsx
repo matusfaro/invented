@@ -97,7 +97,6 @@ function TrendingCard({ item, live, rank }: { item: TrendingItem; live: number; 
           <a href={patentPdfUrl(item.id)} target="_blank" rel="noreferrer">
             pdf
           </a>
-          <button onClick={() => modals.openUpvote(item)}>⬆ upvote (from $400)</button>
         </div>
       </div>
     </article>
