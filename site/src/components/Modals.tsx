@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 /**
  * The joke is that everything is real: upvoting = citing the patent in your own
@@ -8,17 +8,34 @@ import type { ReactNode } from 'react';
  */
 
 function Modal({ title, sub, onClose, children }: { title: string; sub: string; onClose: () => void; children: ReactNode }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const titleId = useId();
+  const descriptionId = useId();
+  useEffect(() => {
+    const dialog = dialogRef.current!;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.showModal();
+    const cancel = (event: Event) => { event.preventDefault(); onCloseRef.current(); };
+    dialog.addEventListener('cancel', cancel);
+    return () => {
+      dialog.removeEventListener('cancel', cancel);
+      dialog.close();
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <dialog ref={dialogRef} className="modal-backdrop" aria-labelledby={titleId} aria-describedby={descriptionId} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="close" onClick={onClose}>
+        <button type="button" className="close" onClick={onClose} aria-label="Close dialog" autoFocus>
           ✕
         </button>
-        <h2>{title}</h2>
-        <p className="sub">{sub}</p>
+        <h2 id={titleId}>{title}</h2>
+        <p id={descriptionId} className="sub">{sub}</p>
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 

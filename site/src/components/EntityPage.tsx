@@ -54,6 +54,7 @@ export function EntityPage({
       {matches.length === 0 && !feed.loading && (
         <div className="empty">Nothing from {name} in the recently shipped weeks.</div>
       )}
+      {feed.failedDates.length > 0 && <p role="status">Some days could not be loaded. <button onClick={feed.retry} disabled={feed.loading}>Retry</button></p>}
       {feed.hasMore && (
         <button className="loadmore" onClick={feed.loadMore} disabled={feed.loading}>
           {feed.loading ? 'loading…' : 'search further back'}

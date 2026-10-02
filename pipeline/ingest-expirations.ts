@@ -23,13 +23,13 @@
  */
 import { createInterface } from 'node:readline';
 import { existsSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import type { ExpiringDayFile, ExpiringItem } from '../shared/types';
+import type { ExpiringDayFile, ExpiringItem, Manifest } from '../shared/types';
 import { downloadFile, listProductFiles } from './lib/odp';
 import { openGrantSource } from './lib/parse-grants';
-import { normalizeDocNumber } from './lib/parse-grants';
-import { readJson, updateManifest, writeJson } from './lib/data-io';
+import { collectExpirationEvent, reconcileExpirations, isoOf } from './lib/expiration-events';
+import { readJson, mergedManifest, commitJsonBatch, recoverJsonBatch } from './lib/data-io';
 
 const { values: args } = parseArgs({
   args: process.argv.slice(2).filter((a) => a !== '--'),
@@ -45,30 +45,29 @@ interface ExpiringMeta {
   lastProcessedEventDate?: string;
 }
 
-function isoOf(yyyymmdd: string): string | null {
-  return /^\d{8}$/.test(yyyymmdd)
-    ? `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6)}`
-    : null;
-}
-
 async function resolveSource(): Promise<string> {
   if (args['from-file']) return resolve(args['from-file']);
   console.log('listing PTMNFEE2 files…');
   const files = await listProductFiles('PTMNFEE2', { latest: true });
   const file = files[0];
   if (!file) throw new Error('no PTMNFEE2 file found');
+  if (basename(file.fileName) !== file.fileName) throw new Error('unexpected source filename');
   mkdirSync(args['cache-dir']!, { recursive: true });
   const dest = resolve(args['cache-dir']!, file.fileName);
   return downloadFile(file, dest);
 }
 
 async function main(): Promise<void> {
+  if (!args['dry-run']) recoverJsonBatch();
   const meta = readJson<ExpiringMeta>('meta/expiring.json') ?? {};
   const since =
     args.since ??
     meta.lastProcessedEventDate ??
     new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
   const today = new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || isoOf(since.replaceAll('-', '')) !== since || since > today) {
+    throw new Error('--since must be a valid date on or before today');
+  }
   console.log(`collecting EXP. events in [${since} … ${today}]`);
 
   const path = await resolveSource();
@@ -83,27 +82,7 @@ async function main(): Promise<void> {
   for await (const line of rl) {
     lines++;
     if (lines % 2_000_000 === 0) console.log(`  ${lines / 1e6}M lines…`);
-    if (line.length < 57) continue;
-    const code = line.slice(52, 57).trim();
-    if (code !== 'EXP.' && code !== 'EXPX') continue;
-    const eventDate = isoOf(line.slice(43, 51));
-    if (!eventDate) continue;
-    const rawPatent = line.slice(0, 13).trim();
-    const id = normalizeDocNumber(rawPatent);
-    if (code === 'EXPX') {
-      const prev = reinstated.get(id);
-      if (!prev || eventDate > prev) reinstated.set(id, eventDate);
-      continue;
-    }
-    if (eventDate < since || eventDate > today) continue;
-    lapses.set(id, {
-      id,
-      type: rawPatent.startsWith('RE') ? 'reissue' : 'utility',
-      grantDate: isoOf(line.slice(34, 42)) ?? undefined,
-      filingDate: isoOf(line.slice(25, 33)) ?? undefined,
-      expiryDate: eventDate,
-      reason: 'fee_lapse',
-    });
+    collectExpirationEvent(line, since, today, lapses, reinstated);
   }
   console.log(`  ${lines} lines scanned`);
   if (lines === 0) throw new Error('read 0 lines — refusing to continue');
@@ -133,17 +112,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  for (const d of days) {
-    // Merge with any existing day file so overlapping windows stay idempotent.
+  // Reinstatements can cancel patents published before this run's new-event window.
+  const outputs: Record<string, unknown> = {};
+  const publishedDays = readJson<Manifest>('manifest.json')?.expiring ?? [];
+  for (const d of new Set([...publishedDays, ...days])) {
     const existing = readJson<ExpiringDayFile>(`expiring/${d}.json`);
-    const merged = new Map<string, ExpiringItem>();
-    for (const it of existing?.items ?? []) merged.set(it.id, it);
-    for (const it of byDay.get(d)!) merged.set(it.id, it);
-    const items = [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
-    writeJson(`expiring/${d}.json`, { date: d, items } satisfies ExpiringDayFile);
+    const items = reconcileExpirations(existing?.items ?? [], byDay.get(d) ?? [], reinstated);
+    if (!existing || JSON.stringify(items) !== JSON.stringify(existing.items)) {
+      outputs[`expiring/${d}.json`] = { date: d, items } satisfies ExpiringDayFile;
+    }
   }
-  updateManifest({ expiring: days });
-  writeJson('meta/expiring.json', { lastProcessedEventDate: today } satisfies ExpiringMeta);
+  outputs["manifest.json"] = mergedManifest({ expiring: days });
+  outputs["meta/expiring.json"] = { lastProcessedEventDate: today } satisfies ExpiringMeta;
+  commitJsonBatch(outputs);
   console.log('\ndone.');
 }
 

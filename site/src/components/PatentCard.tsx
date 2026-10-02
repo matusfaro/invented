@@ -15,7 +15,7 @@ export function PatentCard({
   upvotes?: number;
 }) {
   const modals = useModals();
-  const detailHref = hrefFor(`/patent/${item.grantDate ? dateOfReveal(item) : ''}/${item.id}`);
+  const detailHref = hrefFor(`/patent/${dateOfReveal(item)}/${encodeURIComponent(item.id)}`);
   const industry = industryOf(item.cpc);
   return (
     <article className={`card ${fresh ? 'fresh' : ''}`}>

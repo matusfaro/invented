@@ -1,4 +1,5 @@
-import { createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, statSync, renameSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline as streamPipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
@@ -34,7 +35,12 @@ async function odpFetch(url: string): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(url, { headers: { 'X-API-Key': apiKey() } });
     if (res.status === 429 && attempt <= 5) {
-      const wait = Number(res.headers.get('retry-after') ?? attempt * 5) * 1000;
+      const retryAfter = res.headers.get('retry-after');
+      const seconds = retryAfter === null ? NaN : Number(retryAfter);
+      const requested = Number.isFinite(seconds)
+        ? seconds * 1000 : Date.parse(retryAfter ?? '') - Date.now();
+      const wait = Number.isFinite(requested) ? Math.min(300_000, Math.max(0, requested)) : attempt * 5000;
+      await res.body?.cancel();
       console.log(`  429 rate-limited, waiting ${wait / 1000}s…`);
       await new Promise((r) => setTimeout(r, wait));
       continue;
@@ -63,6 +69,7 @@ export async function listProductFiles(
 
 /** Download a product file to disk (skips when already cached with same size). */
 export async function downloadFile(file: OdpFile, destPath: string): Promise<string> {
+  if (!Number.isSafeInteger(file.fileSize) || file.fileSize < 0) throw new Error('invalid download size');
   if (existsSync(destPath) && statSync(destPath).size === file.fileSize) {
     console.log(`  cache hit: ${destPath}`);
     return destPath;
@@ -71,6 +78,13 @@ export async function downloadFile(file: OdpFile, destPath: string): Promise<str
   console.log(`  downloading ${file.fileName} (${(file.fileSize / 1e6).toFixed(0)} MB)…`);
   const res = await odpFetch(file.fileDownloadURI);
   if (!res.body) throw new Error('empty response body');
-  await streamPipeline(Readable.fromWeb(res.body as never), createWriteStream(destPath));
+  const temporary = destPath + '.' + randomUUID() + '.part';
+  try {
+    await streamPipeline(Readable.fromWeb(res.body as never), createWriteStream(temporary, { flags: 'wx' }));
+    if (statSync(temporary).size !== file.fileSize) throw new Error('download size differs from product metadata');
+    renameSync(temporary, destPath);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
   return destPath;
 }

@@ -5,16 +5,21 @@ import { industryOf } from '../cpc';
 import { hrefFor } from '../router';
 import { useModals } from '../App';
 import { Giscus } from './Giscus';
+import { useNow } from '../reveal';
 
 /** Route: #/patent/<reveal-date>/<id> — the date tells us which day file holds it. */
 export function PatentDetail({ date, id }: { date: string; id: string }) {
   const [item, setItem] = useState<PatentItem | null | 'missing'>(null);
   const modals = useModals();
+  const now = useNow();
 
   useEffect(() => {
+    let alive = true;
+    setItem(null);
     void fetchNewDay(date).then((day) => {
-      setItem(day?.items.find((i) => i.id === id) ?? 'missing');
+      if (alive) setItem(day?.items.find((i) => i.id === id) ?? 'missing');
     });
+    return () => { alive = false; };
   }, [date, id]);
 
   if (item === null) return <div className="empty">loading…</div>;
@@ -30,7 +35,7 @@ export function PatentDetail({ date, id }: { date: string; id: string }) {
     );
 
   // Not revealed yet? No spoilers — the feed's illusion holds even on deep links.
-  if (item.revealTs > Date.now())
+  if (item.revealTs > now)
     return <div className="empty">This patent hasn't been granted yet*. Come back soon. <br />
       <small>*by our clock</small></div>;
 

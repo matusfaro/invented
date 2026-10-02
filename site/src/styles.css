@@ -166,3 +166,8 @@ code.cite { font-family: var(--mono); font-size: 12px; background: var(--chip); 
 .entity-head { margin: 18px 2px 10px; }
 .entity-head h1 { font-size: 20px; margin: 0; }
 .entity-head .sub { color: var(--text-dim); font-size: 13px; }
+
+/* Native modal dialog supplies focus containment, inert background and Escape. */
+dialog.modal-backdrop { border: 0; padding: 0; margin: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; color: inherit; }
+dialog.modal-backdrop:not([open]) { display: none; }
+dialog.modal-backdrop::backdrop { background: transparent; }

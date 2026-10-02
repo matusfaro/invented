@@ -11,7 +11,8 @@ export function Giscus({ term }: { term: string }) {
 
   useEffect(() => {
     if (!GISCUS.repo || !ref.current) return;
-    ref.current.innerHTML = '';
+    const container = ref.current;
+    container.replaceChildren();
     const s = document.createElement('script');
     s.src = 'https://giscus.app/client.js';
     s.async = true;
@@ -29,7 +30,8 @@ export function Giscus({ term }: { term: string }) {
       'data-theme': 'dark_dimmed',
       'data-lang': 'en',
     }).forEach(([k, v]) => s.setAttribute(k, v));
-    ref.current.appendChild(s);
+    container.appendChild(s);
+    return () => container.replaceChildren();
   }, [term]);
 
   if (!GISCUS.repo)

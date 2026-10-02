@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import type { ExpiringDayFile, ExpiringItem, Manifest } from '../../../shared/types';
 import { fetchExpiringDay, patentPdfUrl, utcDateString } from '../api';
+import { useDayPages } from '../feedData';
+import { useNow } from '../reveal';
 
 /**
  * EXPIRING reveals LATE, never early: the pipeline only lists a patent on a
@@ -8,27 +10,9 @@ import { fetchExpiringDay, patentPdfUrl, utcDateString } from '../api';
  * already public domain.
  */
 export function FeedExpiring({ manifest }: { manifest: Manifest | null }) {
-  const [days, setDays] = useState<ExpiringDayFile[]>([]);
-  const [cursor, setCursor] = useState(0);
-
-  const today = utcDateString(Date.now());
-  const dates = (manifest?.expiring ?? []).filter((d) => d <= today).reverse();
-
-  useEffect(() => {
-    if (dates.length === 0 || days.length > 0) return;
-    void Promise.all(dates.slice(0, 3).map(fetchExpiringDay)).then((files) => {
-      setDays(files.filter((f): f is ExpiringDayFile => f !== null));
-      setCursor(3);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest]);
-
-  const loadMore = () => {
-    void Promise.all(dates.slice(cursor, cursor + 3).map(fetchExpiringDay)).then((files) => {
-      setDays((prev) => [...prev, ...files.filter((f): f is ExpiringDayFile => f !== null)]);
-      setCursor((c) => c + 3);
-    });
-  };
+  const today = utcDateString(useNow(60_000));
+  const dates = useMemo(() => (manifest?.expiring ?? []).filter((d) => d <= today).slice().sort().reverse(), [manifest, today]);
+  const { files: days, loading, hasMore, loadMore, failedDates, retry } = useDayPages<ExpiringDayFile>(dates, fetchExpiringDay, 3, manifest?.generatedAt ?? '');
 
   if (!manifest) return <div className="empty">loading…</div>;
   if (dates.length === 0)
@@ -53,8 +37,9 @@ export function FeedExpiring({ manifest }: { manifest: Manifest | null }) {
           ))}
         </section>
       ))}
-      {cursor < dates.length && (
-        <button className="loadmore" onClick={loadMore}>
+      {failedDates.length > 0 && <p role="status">Some days could not be loaded. <button onClick={retry} disabled={loading}>Retry</button></p>}
+      {hasMore && (
+        <button className="loadmore" onClick={loadMore} disabled={loading}>
           older obituaries
         </button>
       )}

@@ -20,15 +20,18 @@ export function FeedTrending({ manifest }: { manifest: Manifest | null }) {
   const weeks = manifest?.trending.slice(-2).reverse() ?? [];
   const weeksKey = weeks.join(',');
   useEffect(() => {
+    let alive = true;
+    setFiles(null);
     if (weeks.length)
       void Promise.all(weeks.map(fetchTrendingWeek)).then((fs) =>
-        setFiles(fs.filter((f): f is TrendingFile => f !== null)),
+        alive && setFiles(fs.filter((f): f is TrendingFile => f !== null)),
       );
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeksKey]);
 
   if (!manifest) return <div className="empty">loading…</div>;
-  if (weeks.length === 0 || !files)
+  if (weeks.length === 0 || !files?.length)
     return <div className="empty">No trending data yet — the weekly tally hasn't run.</div>;
 
   const rankWeek = (f: TrendingFile) =>

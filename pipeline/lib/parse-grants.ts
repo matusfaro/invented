@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import type { Readable } from 'node:stream';
+import { Readable } from 'node:stream';
 import { XMLParser } from 'fast-xml-parser';
 import type { PatentItem, PatentType } from '../../shared/types';
 
@@ -64,10 +64,14 @@ const NAMED_ENTITIES: Record<string, string> = {
 
 /** fast-xml-parser leaves numeric character references intact — decode them. */
 function decodeEntities(s: string): string {
+  const codePoint = (original: string, value: number): string =>
+    Number.isInteger(value) && value >= 0 && value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff)
+      ? String.fromCodePoint(value)
+      : original;
   return s
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
-    .replace(/&([a-zA-Z]+);/g, (m, name: string) => NAMED_ENTITIES[name] ?? m);
+    .replace(/&#x([0-9a-fA-F]+);/g, (m, hex) => codePoint(m, parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (m, dec) => codePoint(m, Number(dec)))
+    .replace(/&([a-zA-Z]+);/g, (m, name: string) => Object.hasOwn(NAMED_ENTITIES, name) ? NAMED_ENTITIES[name] : m);
 }
 
 function textOf(node: unknown): string {
@@ -96,7 +100,7 @@ function personName(addressbook: Record<string, unknown> | undefined): string | 
 export function parseGrantDoc(doc: string): ParsedGrant | null {
   // Cut everything after the abstract; biblio + abstract always precede it.
   const cutAt = doc.search(/<(drawings|description|us-claim-statement|claims)[\s>]/);
-  const head = (cutAt > 0 ? doc.slice(0, cutAt) : doc) + '</us-patent-grant>';
+  const head = cutAt > 0 ? doc.slice(0, cutAt) + '</us-patent-grant>' : doc;
 
   let root: Record<string, any>;
   try {
@@ -116,9 +120,12 @@ export function parseGrantDoc(doc: string): ParsedGrant | null {
 
   const id = normalizeDocNumber(String(pubDoc['doc-number']));
   const kind = String(pubDoc['kind'] ?? '');
-  const type = APPL_TYPES[String(appRef?.['@_appl-type'] ?? '')] ?? 'other';
+  const applType = String(appRef?.['@_appl-type'] ?? '');
+  const type = Object.hasOwn(APPL_TYPES, applType) ? APPL_TYPES[applType] : 'other';
 
-  const title = textOf(biblio['invention-title']).replace(/\s+/g, ' ').trim();
+  const titleMarkup = doc.match(/<invention-title\b[^>]*>([\s\S]*?)<\/invention-title>/)?.[1];
+  const title = (titleMarkup === undefined ? textOf(biblio['invention-title']) : decodeEntities(titleMarkup.replace(/<[^>]+>/g, ' ')))
+    .replace(/\s+/g, ' ').trim();
   if (!title) return null;
 
   // Abstract straight from the raw XML: parsed-object traversal loses the
@@ -208,6 +215,8 @@ export function parseGrantDoc(doc: string): ParsedGrant | null {
 
 /** Split a concatenated multi-document XML stream and yield each parsed grant. */
 export async function* parseGrantStream(stream: Readable): AsyncGenerator<ParsedGrant> {
+  // Readable's StringDecoder preserves UTF-8 sequences split between ZIP chunks.
+  stream.setEncoding('utf8');
   let buf = '';
   let docsSeen = 0;
   for await (const chunk of stream) {
@@ -219,6 +228,8 @@ export async function* parseGrantStream(stream: Readable): AsyncGenerator<Parsed
       const next = buf.indexOf('<?xml', start + 5);
       if (next < 0) break;
       const doc = buf.slice(start, next);
+      if (doc.length > 64 * 1024 * 1024) throw new Error('grant document exceeds 64MB');
+      if (!doc.includes('</us-patent-grant>')) throw new Error('incomplete grant XML document');
       buf = buf.slice(next);
       docsSeen++;
       const parsed = parseGrantDoc(doc);
@@ -228,6 +239,7 @@ export async function* parseGrantStream(stream: Readable): AsyncGenerator<Parsed
     if (buf.length > 64 * 1024 * 1024) throw new Error('grant document exceeds 64MB — parser desync?');
   }
   if (buf.includes('<?xml')) {
+    if (!buf.includes('</us-patent-grant>')) throw new Error('incomplete final grant XML document');
     docsSeen++;
     const parsed = parseGrantDoc(buf.slice(buf.indexOf('<?xml')));
     if (parsed) yield parsed;
@@ -239,10 +251,22 @@ export async function* parseGrantStream(stream: Readable): AsyncGenerator<Parsed
 export function openGrantSource(path: string): Readable {
   if (path.endsWith('.zip')) {
     const child = spawn('unzip', ['-p', path], { stdio: ['ignore', 'pipe', 'inherit'] });
-    child.on('exit', (code) => {
-      if (code !== 0) console.error(`unzip exited with code ${code}`);
+    const exited = new Promise<void>((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => {
+        if (code === 0) resolve();
+        else reject(new Error('unzip failed (' + (signal ?? code) + ')'));
+      });
     });
-    return child.stdout;
+    void exited.catch(() => {});
+    return Readable.from((async function* () {
+      try {
+        for await (const chunk of child.stdout) yield chunk;
+        await exited;
+      } finally {
+        if (child.exitCode === null) child.kill();
+      }
+    })());
   }
   return createReadStream(path, 'utf8');
 }

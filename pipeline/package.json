@@ -6,14 +6,15 @@
   "scripts": {
     "ingest": "tsx --env-file-if-exists=.env ingest-grants.ts",
     "expiring": "tsx --env-file-if-exists=.env ingest-expirations.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test lib/*.test.ts"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.0.0"
+    "fast-xml-parser": "^5.11.2"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.8.0"
+    "@types/node": "^22.20.4",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
   }
 }

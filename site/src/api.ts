@@ -19,14 +19,14 @@ export function fetchManifest(): Promise<Manifest | null> {
   return fetchJson<Manifest>(`manifest.json?h=${Math.floor(Date.now() / 3_600_000)}`);
 }
 
-export const fetchNewDay = (date: string) => fetchJson<DayFile>(`new/${date}.json`);
-export const fetchExpiringDay = (date: string) => fetchJson<ExpiringDayFile>(`expiring/${date}.json`);
-export const fetchTrendingWeek = (week: string) => fetchJson<TrendingFile>(`trending/${week}.json`);
+export const fetchNewDay = (date: string) => fetchJson<DayFile>(`new/${encodeURIComponent(date)}.json`);
+export const fetchExpiringDay = (date: string) => fetchJson<ExpiringDayFile>(`expiring/${encodeURIComponent(date)}.json`);
+export const fetchTrendingWeek = (week: string) => fetchJson<TrendingFile>(`trending/${encodeURIComponent(week)}.json`);
 
 export function utcDateString(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
 export function patentPdfUrl(id: string): string {
-  return `https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/${id}`;
+  return `https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/${encodeURIComponent(id)}`;
 }

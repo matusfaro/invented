@@ -26,6 +26,7 @@ export function FeedNew({ manifest, query }: { manifest: Manifest | null; query:
         </div>
       )}
 
+      {feed.failedDates.length > 0 && <p role="status">Some days could not be loaded. <button onClick={feed.retry} disabled={feed.loading}>Retry</button></p>}
       {feed.hasMore && (
         <button className="loadmore" onClick={feed.loadMore} disabled={feed.loading}>
           {feed.loading ? 'loading…' : 'keep scrolling into the past'}

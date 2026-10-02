@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<us-patent-grant>
+  <us-bibliographic-data-grant>
+    <publication-reference><document-id><doc-number>012345678</doc-number><kind>B2</kind><date>20260630</date></document-id></publication-reference>
+    <application-reference appl-type="utility"><document-id><date>20240101</date></document-id></application-reference>
+    <invention-title>A <b>smart</b> device for Café</invention-title>
+    <us-parties><us-applicants>
+      <us-applicant app-type="applicant-inventor"><addressbook><first-name>Ada</first-name><last-name>Lovelace</last-name></addressbook></us-applicant>
+      <us-applicant app-type="applicant"><addressbook><orgname>Example Research</orgname></addressbook></us-applicant>
+    </us-applicants></us-parties>
+    <classifications-cpc><main-cpc><classification-cpc><section>H</section><class>01</class><subclass>M</subclass></classification-cpc></main-cpc></classifications-cpc>
+    <us-references-cited>
+      <us-citation><patcit><document-id><country>US</country><doc-number>01234567</doc-number><name>Earlier inventor</name><date>20000000</date></document-id></patcit></us-citation>
+      <us-citation><patcit><document-id><country>US</country><doc-number>20160026253</doc-number></document-id></patcit></us-citation>
+      <us-citation><patcit><document-id><country>US</country><doc-number>01234567</doc-number></document-id></patcit></us-citation>
+    </us-references-cited>
+  </us-bibliographic-data-grant>
+  <abstract><p>A <b>safe</b> fixture &amp; example.</p></abstract>
+  <description><p>Not part of the feed.</p></description>
+</us-patent-grant>

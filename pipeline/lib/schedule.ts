@@ -13,6 +13,10 @@
 
 export function revealWindow(grantTuesday: string): { start: number; end: number } {
   const tuesday = Date.parse(`${grantTuesday}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(grantTuesday) || !Number.isFinite(tuesday) ||
+      new Date(tuesday).toISOString().slice(0, 10) !== grantTuesday) {
+    throw new Error('invalid grant date: ' + grantTuesday);
+  }
   return { start: tuesday + 2 * 86_400_000, end: tuesday + 9 * 86_400_000 };
 }
 

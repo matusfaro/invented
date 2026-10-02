@@ -5,24 +5,13 @@ import { useEffect, useState } from 'react';
  * GitHub Pages has no rewrite rules, so deep links under history routing would
  * 404 without the 404.html hack. `#/patent/2026-07-09/12345678` always works.
  */
-export interface Route {
-  parts: string[];
-  query: URLSearchParams;
-}
-
-function parseHash(): Route {
-  const raw = window.location.hash.replace(/^#\/?/, '');
-  const [path, queryStr] = raw.split('?');
-  return {
-    parts: path.split('/').filter(Boolean).map(decodeURIComponent),
-    query: new URLSearchParams(queryStr ?? ''),
-  };
-}
+export type { Route } from './routeCore';
+import { parseHash, type Route } from './routeCore';
 
 export function useRoute(): Route {
-  const [route, setRoute] = useState(parseHash);
+  const [route, setRoute] = useState(() => parseHash(window.location.hash));
   useEffect(() => {
-    const onChange = () => setRoute(parseHash());
+    const onChange = () => setRoute(parseHash(window.location.hash));
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);
   }, []);

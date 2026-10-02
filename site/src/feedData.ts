@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { DayFile, Manifest, PatentItem } from '../../shared/types';
 import { fetchManifest, fetchNewDay, utcDateString } from './api';
+import { useNow } from './reveal';
+import { DayPages } from './dayPages';
 
 export function useManifest(): Manifest | null {
   const [manifest, setManifest] = useState<Manifest | null>(null);
   useEffect(() => {
     let alive = true;
-    fetchManifest().then((m) => alive && setManifest(m));
+    const refresh = () => { void fetchManifest().then((m) => { if (alive && m) setManifest(m); }); };
+    refresh();
+    const timer = setInterval(refresh, 3_600_000);
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, []);
   return manifest;
@@ -22,6 +27,8 @@ export interface NewFeedData {
   loadMore: () => void;
   /** manifest missing entirely — pipeline never ran */
   noData: boolean;
+  failedDates: string[];
+  retry: () => void;
 }
 
 /**
@@ -30,56 +37,22 @@ export interface NewFeedData {
  * across the midnight boundary); loadMore() pulls one older date per call for
  * infinite scroll.
  */
+/** Shared guarded pagination: old responses cannot overwrite a changed date list. */
+export function useDayPages<T extends { date: string }>(dates: string[], fetchDay: (date: string) => Promise<T | null>, batchSize = 3, revision = '') {
+  const pages = useMemo(() => new DayPages(fetchDay, batchSize), [fetchDay, batchSize]);
+  const state = useSyncExternalStore(pages.subscribe, pages.snapshot);
+  useEffect(() => { pages.setDates(dates, revision); }, [pages, dates, revision]);
+  useEffect(() => () => pages.dispose(), [pages]);
+  return { ...state, loadMore: pages.loadMore, retry: pages.retry };
+}
+
 export function useNewFeed(manifest: Manifest | null): NewFeedData {
-  const [days, setDays] = useState<Record<string, DayFile>>({});
-  const [loading, setLoading] = useState(false);
-  const [cursor, setCursor] = useState<number | null>(null); // index into dates (desc) of next unloaded
-  const loadingRef = useRef(false);
-
-  // Dates descending, excluding far-future pre-published days.
-  const dates = useMemo(() => {
-    if (!manifest) return [];
-    const tomorrow = utcDateString(Date.now() + 86_400_000);
-    return manifest.new.filter((d) => d <= tomorrow).reverse();
-  }, [manifest]);
-
-  const loadNext = useCallback(
-    async (fromIndex: number, count: number) => {
-      if (loadingRef.current) return;
-      loadingRef.current = true;
-      setLoading(true);
-      const slice = dates.slice(fromIndex, fromIndex + count);
-      const files = await Promise.all(slice.map(fetchNewDay));
-      setDays((prev) => {
-        const next = { ...prev };
-        files.forEach((f, i) => {
-          if (f) next[slice[i]] = f;
-        });
-        return next;
-      });
-      setCursor(fromIndex + slice.length);
-      setLoading(false);
-      loadingRef.current = false;
-    },
-    [dates],
-  );
-
-  useEffect(() => {
-    if (dates.length > 0 && cursor === null) {
-      // initial: today+tomorrow (+1 spare so the feed isn't empty on quiet days)
-      void loadNext(0, 3);
-    }
-  }, [dates, cursor, loadNext]);
-
-  const items = useMemo(() => Object.values(days).flatMap((d) => d.items), [days]);
-
+  const tomorrow = utcDateString(useNow(60_000) + 86_400_000);
+  const dates = useMemo(() => manifest?.new.filter((d) => d <= tomorrow).slice().sort().reverse() ?? [], [manifest, tomorrow]);
+  const feed = useDayPages<DayFile>(dates, fetchNewDay, 3, manifest?.generatedAt ?? '');
+  const items = useMemo(() => feed.files.flatMap((day) => day.items), [feed.files]);
   return {
-    items,
-    loading,
-    hasMore: cursor !== null && cursor < dates.length,
-    loadMore: () => {
-      if (cursor !== null) void loadNext(cursor, 1);
-    },
+    items, failedDates: feed.failedDates, retry: feed.retry, loading: feed.loading, hasMore: feed.hasMore, loadMore: feed.loadMore,
     noData: manifest !== null && manifest.new.length === 0,
   };
 }

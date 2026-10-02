@@ -10,13 +10,13 @@
  *   pnpm run ingest -- --force                         # re-ingest despite ledger
  */
 import { existsSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { DayFile, PatentItem, TrendingFile, TrendingItem } from '../shared/types';
 import { downloadFile, listProductFiles } from './lib/odp';
 import { openGrantSource, parseGrantStream, type ParsedGrant } from './lib/parse-grants';
-import { assignRevealTimes } from './lib/schedule';
-import { readLedger, updateManifest, writeJson, writeLedger } from './lib/data-io';
+import { assignRevealTimes, revealWindow } from './lib/schedule';
+import { readLedger, mergedManifest, commitJsonBatch, recoverJsonBatch } from './lib/data-io';
 
 const TRENDING_TOP_N = 200;
 
@@ -34,7 +34,7 @@ const { values: args } = parseArgs({
 });
 
 function grantTuesdayFromFileName(name: string): string | null {
-  const m = name.match(/ipg(\d{2})(\d{2})(\d{2})/);
+  const m = basename(name).match(/ipg(\d{2})(\d{2})(\d{2})/);
   return m ? `20${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
@@ -42,7 +42,8 @@ async function resolveSource(): Promise<{ path: string; grantTuesday: string }> 
   if (args['from-file']) {
     const path = resolve(args['from-file']);
     const grantTuesday =
-      args.week ?? grantTuesdayFromFileName(path) ?? new Date().toISOString().slice(0, 10);
+      args.week ?? grantTuesdayFromFileName(path);
+    if (!grantTuesday) throw new Error('use --week YYYY-MM-DD when the source filename does not contain ipgYYMMDD');
     return { path, grantTuesday };
   }
   console.log('listing PTGRXML files…');
@@ -54,13 +55,24 @@ async function resolveSource(): Promise<{ path: string; grantTuesday: string }> 
   const file = files[0];
   if (!file) throw new Error(`no PTGRXML file found${args.week ? ` for week ${args.week}` : ''}`);
   mkdirSync(args['cache-dir']!, { recursive: true });
+  if (basename(file.fileName) !== file.fileName) throw new Error('unexpected source filename');
   const dest = resolve(args['cache-dir']!, file.fileName);
   await downloadFile(file, dest);
   return { path: dest, grantTuesday: file.fileDataFromDate };
 }
 
 async function main(): Promise<void> {
+  if (args.week) revealWindow(args.week);
+  const limit = args.limit === undefined ? Infinity : Number(args.limit);
+  if (args.limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
+    throw new Error('--limit must be a positive integer');
+  }
+  if (args.limit !== undefined && !args['dry-run']) {
+    throw new Error('--limit requires --dry-run to avoid publishing an incomplete week');
+  }
+  if (!args['dry-run']) recoverJsonBatch();
   const { path, grantTuesday } = await resolveSource();
+  revealWindow(grantTuesday);
   if (!existsSync(path)) throw new Error(`source not found: ${path}`);
 
   const ledger = readLedger();
@@ -70,7 +82,6 @@ async function main(): Promise<void> {
   }
 
   console.log(`parsing ${path} (week of ${grantTuesday})…`);
-  const limit = args.limit ? Number(args.limit) : Infinity;
   const grants: ParsedGrant[] = [];
   for await (const grant of parseGrantStream(openGrantSource(path))) {
     grants.push(grant);
@@ -131,19 +142,21 @@ async function main(): Promise<void> {
     return;
   }
 
+  const outputs: Record<string, unknown> = {};
   for (const d of days) {
     const items = byDay.get(d)!.sort((a, b) => a.revealTs - b.revealTs);
     const file: DayFile = { date: d, count: items.length, items };
-    writeJson(`new/${d}.json`, file);
+    outputs[`new/${d}.json`] = file;
   }
-  writeJson(`trending/${grantTuesday}.json`, trending);
-  updateManifest({ new: days, trending: [grantTuesday] });
+  outputs[`trending/${grantTuesday}.json`] = trending;
+  outputs["manifest.json"] = mergedManifest({ new: days, trending: [grantTuesday] });
   ledger[grantTuesday] = {
     fileName: path.split('/').pop()!,
     ingestedAt: new Date().toISOString(),
     grants: grants.length,
   };
-  writeLedger(ledger);
+  outputs["meta/weeks.json"] = ledger;
+  commitJsonBatch(outputs);
   console.log('\ndone.');
 }
 

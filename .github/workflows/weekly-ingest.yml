@@ -41,8 +41,14 @@ jobs:
       - run: pnpm --dir pipeline install --frozen-lockfile
 
       - name: Ingest weekly grants (NEW + TRENDING)
-        run: pnpm --dir pipeline run ingest ${{ inputs.week && format('-- --week {0}', inputs.week) || '' }}
+        run: |
+          if [ -n "$INGEST_WEEK" ]; then
+            pnpm --dir pipeline run ingest -- --week "$INGEST_WEEK"
+          else
+            pnpm --dir pipeline run ingest
+          fi
         env:
+          INGEST_WEEK: ${{ inputs.week }}
           USPTO_API_KEY: ${{ secrets.USPTO_API_KEY }}
 
       - name: Ingest expirations (EXPIRING)

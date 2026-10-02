@@ -6,3 +6,6 @@ dist/
 .DS_Store
 # raw bulk downloads are cached locally, never committed
 .cache/
+
+# Durable incomplete ingest journal; recovered before the next non-dry run.
+data/.ingest-pending.json
